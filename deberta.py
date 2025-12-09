@@ -47,7 +47,7 @@ data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, r
 # TODO: Set these as argparse args
 batch_size = 8
 # Lambda leading coefficient as a multiplier for discriminator loss
-lambda_disc = 0.5
+lambda_disc = 0.3
 
 # Create dataloaders with the mlm collator
 train_dataloader = DataLoader(tokenized_dataset["train"], batch_size=batch_size, collate_fn=data_collator, shuffle=True)
@@ -112,7 +112,7 @@ model = DebertaV3GDES().to(device)
 # Standard loss with BCE with logits for optimized discriminator processing
 loss_fn = nn.CrossEntropyLoss()
 disc_loss_fn = nn.BCEWithLogitsLoss()
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.01)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.1)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
 # For fp16/bf16 mixed precision
@@ -221,7 +221,8 @@ def main():
         eval(eval_dataloader, model, loss_fn)
         print()
     print("Done!")
-    model.save_pretrained("out/")
+    PATH = "out/"
+    torch.save(model.state_dict(), PATH)
     tokenizer.save_pretrained("out/")
     print("Model and tokenizer saved")
 
