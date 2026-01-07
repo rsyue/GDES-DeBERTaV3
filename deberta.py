@@ -6,6 +6,32 @@
 
 import copy
 
+import argparse
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("-m", "--model", help="The model to train using RTD with GDES", type=str)
+parser.add_argument("-ld", "--lambda_disc", help="The lambda coefficient for the discriminator model", type=float)
+parser.add_argument("-bs", "--batch_size", help="The batch size for training and validation", type=int)
+parser.add_argument("-ep", "--epochs", help="Number of training epochs", type=int)
+parser.add_argument("-lr", "--learning_rate", help="Learning rate for training", type=float)
+parser.add_argument("-wd", "--weight_decay", help="Weight decay regularization for the Adam optimizer", type=float)
+parser.add_argument("-g", "--gamma", help="Gamma value for exponential lr scheduler", type=float)
+parser.add_argument("--fp16", action=argparse.BooleanOptionalAction)
+parser.add_argument("--bf16", action=argparse.BooleanOptionalAction)
+
+args = parser.parse_args()
+
+class MixedPrecisionSelectionError(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+        print("Cannot select multiple mixed precision settings at once")
+
+if args.fp16 and args.bf16:
+    raise MixedPrecisionSelectionError("Select only fp16 or bf16")
+
+print(f"Args passed:\n\n{args}")
+
 from transformers import DebertaV2ForMaskedLM, DebertaV2Tokenizer, DataCollatorForLanguageModeling
 from datasets import load_dataset
 
@@ -18,9 +44,19 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from tqdm.auto import tqdm
 
+model = args.model if args.model else "microsoft/deberta-v3-base"
+lambda_disc = float(args.lambda_disc) if args.lambda_disc else 0.5
+batch_size = int(args.batch_size) if args.batch_size else 8
+epochs = int(args.epochs) if args.epochs else 5
+learning_rate = float(args.learning_rate) if args.learning_rate else 2e-5
+weight_decay = float(args.weight_decay) if args.weight_decay else 0.01
+gamma = float(args.gamma) if args.gamma else 0.9
+
+if args.fp16 or args.bf16:
+    dtype = torch.float16 if args.fp16 else torch.bfloat16
+
 # Set model id
-# TODO replace with argparse args
-model_id = "microsoft/deberta-v3-base"
+model_id = model
 
 # Load a fast tokenizer, note that V3 is not available so we use V2
 tokenizer = DebertaV2Tokenizer.from_pretrained(model_id, is_fast=True)
@@ -43,11 +79,6 @@ tokenized_dataset = dataset.map(tokenize, batched=True, remove_columns=["text", 
 tokenized_dataset.set_format("torch")
 
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, return_tensors="pt")
-
-# TODO: Set these as argparse args
-batch_size = 8
-# Lambda leading coefficient as a multiplier for discriminator loss
-lambda_disc = 0.3
 
 # Create dataloaders with the mlm collator
 train_dataloader = DataLoader(tokenized_dataset["train"], batch_size=batch_size, collate_fn=data_collator, shuffle=True)
@@ -112,8 +143,8 @@ model = DebertaV3GDES().to(device)
 # Standard loss with BCE with logits for optimized discriminator processing
 loss_fn = nn.CrossEntropyLoss()
 disc_loss_fn = nn.BCEWithLogitsLoss()
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.1)
-scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma)
 
 # For fp16/bf16 mixed precision
 scaler = torch.amp.GradScaler(device=str(device))
@@ -136,7 +167,7 @@ def train(dataloader, model, loss_fn, optimizer):
         inp = inp.to(device)
         # Generate discriminator labels from the input_ids
         disc_labels = (inp.input_ids == tokenizer.mask_token_id).float().squeeze()
-        with torch.autocast(device_type=str(device), dtype=torch.bfloat16):
+        with torch.autocast(device_type=str(device), dtype=dtype):
             gen_outputs = model.forward_gen(**inp)
             gen_loss, gen_logits = gen_outputs.loss, gen_outputs.logits
 
@@ -151,7 +182,7 @@ def train(dataloader, model, loss_fn, optimizer):
             if "embed" in name:
                 param.requires_grad = False
 
-        with torch.autocast(device_type=str(device), dtype=torch.bfloat16):
+        with torch.autocast(device_type=str(device), dtype=dtype):
             disc_outputs = model.forward_disc(**disc_inp)
             disc_loss = disc_loss_fn(disc_outputs, disc_labels)
 
@@ -187,7 +218,7 @@ def eval(dataloader, model, loss_fn):
             inp = inp.to(device)
             disc_labels = (inp.input_ids == tokenizer.mask_token_id).float().squeeze()
             labels += disc_labels.int().squeeze().tolist()[0]
-            with torch.autocast(device_type=str(device), dtype=torch.bfloat16):
+            with torch.autocast(device_type=str(device), dtype=dtype):
                 gen_outputs = model.forward_gen(**inp)
                 gen_loss, gen_logits = gen_outputs.loss, gen_outputs.logits
 
@@ -195,7 +226,7 @@ def eval(dataloader, model, loss_fn):
 
             disc_inp = {"gen_out": masks_filled, "attention_mask": inp.attention_mask}
 
-            with torch.autocast(device_type=str(device), dtype=torch.bfloat16):
+            with torch.autocast(device_type=str(device), dtype=dtype):
                 disc_outputs = model.forward_disc(**disc_inp)
                 disc_loss = loss_fn(disc_outputs, disc_labels)
 
@@ -214,8 +245,7 @@ def eval(dataloader, model, loss_fn):
 
 def main():
     # Full training loop
-    # TODO: Add num epochs as argparse arg
-    for t in range(3):
+    for t in range(epochs):
         print(f"Epoch {t+1}\n--------------------------------------------------")
         train(train_dataloader, model, loss_fn, optimizer)
         eval(eval_dataloader, model, loss_fn)
