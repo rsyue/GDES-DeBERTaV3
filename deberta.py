@@ -40,6 +40,8 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch
 
+from safetensors.torch import save_file
+
 from sklearn.metrics import accuracy_score, f1_score
 
 from tqdm.auto import tqdm
@@ -251,10 +253,10 @@ def main():
         eval(eval_dataloader, model, loss_fn)
         print()
     print("Done!")
-    PATH = "out/"
-    torch.save(model.state_dict(), PATH)
-    tokenizer.save_pretrained("out/")
-    print("Model and tokenizer saved")
+    save_friendly_name = model_id.replace("-", "_").split("/")[1] + "_gdes"
+    model.deberta.save_pretrained(save_friendly_name)
+    tokenizer.save_pretrained(save_friendly_name)
+    print(f"Model and tokenizer saved under '{safe_friendly_name}'")
 
 if __name__ == "__main__":
     main()
