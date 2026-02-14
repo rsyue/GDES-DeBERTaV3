@@ -141,6 +141,10 @@ class DebertaV3GDES(nn.Module):
 # Set device and send model instantiation to it
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = DebertaV3GDES().to(device)
+torch._dynamo.reset()
+model.deberta = torch.compile(model.deberta, fullgraph=True, mode='max-autotune')
+torch.cuda.synchronize()
+print("Model compiled!")
 
 # Standard loss with BCE with logits for optimized discriminator processing
 loss_fn = nn.CrossEntropyLoss()
@@ -256,7 +260,7 @@ def main():
     save_friendly_name = model_id.replace("-", "_").split("/")[1] + "_gdes"
     model.deberta.save_pretrained(save_friendly_name)
     tokenizer.save_pretrained(save_friendly_name)
-    print(f"Model and tokenizer saved under '{safe_friendly_name}'")
+    print(f"Model and tokenizer saved under '{save_friendly_name}'")
 
 if __name__ == "__main__":
     main()
