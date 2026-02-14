@@ -49,9 +49,11 @@ from tqdm.auto import tqdm
 
 from model import DebertaV3GDES
 
+from data import get_dataloaders_and_tokenizer
+
 model = args.model if args.model else "microsoft/deberta-v3-base"
-lambda_disc = float(args.lambda_disc) if args.lambda_disc else 0.5
 batch_size = int(args.batch_size) if args.batch_size else 8
+lambda_disc = float(args.lambda_disc) if args.lambda_disc else 0.5
 epochs = int(args.epochs) if args.epochs else 5
 learning_rate = float(args.learning_rate) if args.learning_rate else 2e-5
 weight_decay = float(args.weight_decay) if args.weight_decay else 0.01
@@ -60,35 +62,14 @@ gamma = float(args.gamma) if args.gamma else 0.9
 dtype = torch.float32
 if args.fp16 or args.bf16:
     dtype = torch.float16 if args.fp16 else torch.bfloat16
+    lambda_disc = torch.tensor(lambda_disc).to(dtype).item()
 
 # Set model id
 model_id = model
 
-# Load a fast tokenizer, note that V3 is not available so we use V2
-tokenizer = DebertaV2Tokenizer.from_pretrained(model_id, is_fast=True)
-
-# Grab the IMDB dataset for unsupervised training
-# and siphon off 10% of data for tok class eval
-dataset = load_dataset("imdb", split="unsupervised")
-dataset = dataset.train_test_split(test_size=0.1)
-print(dataset)
-
-# Tokenize function, truncate at 512, pad, and copy input ids as
-# ground truth for masked text
-def tokenize(batch):
-    tokenized = tokenizer(batch["text"], truncation=True, max_length=512, padding=True)
-    tokenized["labels"] = tokenized["input_ids"]
-    return tokenized
-
-# Batch map tokenization and remove non-numerical columns
-tokenized_dataset = dataset.map(tokenize, batched=True, remove_columns=["text", "label"])
-tokenized_dataset.set_format("torch")
-
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, return_tensors="pt")
-
-# Create dataloaders with the mlm collator
-train_dataloader = DataLoader(tokenized_dataset["train"], batch_size=batch_size, collate_fn=data_collator, shuffle=True)
-eval_dataloader = DataLoader(tokenized_dataset["test"], batch_size=batch_size, collate_fn=data_collator)
+# Get dataloaders and tokenizer
+# TODO add test size as an argparse arg
+train_dataloader, eval_dataloader, tokenizer = get_dataloaders_and_tokenizer(model_id, batch_size)
 
 # Set device and send model instantiation to it
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
