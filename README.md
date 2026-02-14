@@ -14,7 +14,7 @@ The training loop performs two forward passes per step:
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/gdes-debertav3.git
+git clone https://github.com/rsyue/GDES-DeBERTaV3
 cd gdes-debertav3
 pip install -r requirements.txt
 ```

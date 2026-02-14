@@ -47,6 +47,8 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from tqdm.auto import tqdm
 
+from model import DebertaV3GDES
+
 model = args.model if args.model else "microsoft/deberta-v3-base"
 lambda_disc = float(args.lambda_disc) if args.lambda_disc else 0.5
 batch_size = int(args.batch_size) if args.batch_size else 8
@@ -55,6 +57,7 @@ learning_rate = float(args.learning_rate) if args.learning_rate else 2e-5
 weight_decay = float(args.weight_decay) if args.weight_decay else 0.01
 gamma = float(args.gamma) if args.gamma else 0.9
 
+dtype = torch.float32
 if args.fp16 or args.bf16:
     dtype = torch.float16 if args.fp16 else torch.bfloat16
 
@@ -87,61 +90,9 @@ data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, r
 train_dataloader = DataLoader(tokenized_dataset["train"], batch_size=batch_size, collate_fn=data_collator, shuffle=True)
 eval_dataloader = DataLoader(tokenized_dataset["test"], batch_size=batch_size, collate_fn=data_collator)
 
-class DebertaV3GDES(nn.Module):
-    """
-    DeBERTaV3 GDES training classifier class.
-    This ``Module`` lets the user run a generative
-    pass as well as a discriminative pass.
-
-    1. Generative pass: Generate predictions for
-       each masked token
-    2. Discriminative pass: For each token, predict
-       whether it was replaced or part of the original
-       text
-    
-    """
-    
-    def __init__(self):
-        super(DebertaV3GDES, self).__init__()
-        # Idem for tokenizer, V3 not available
-        self.deberta = DebertaV2ForMaskedLM.from_pretrained(model_id)
-
-    def forward_gen(self, **inputs):
-        """
-        Generative forward pass
-
-        Params:
-
-        :inputs: Kwargs as input for the model forward pass
-                 e.g. input_ids, attention_mask
-
-        Returns:
-            :logits: A tensor of computed logits
-        """
-        logits = self.deberta(**inputs)
-        return logits
-
-    def forward_disc(self, gen_out, attention_mask):
-        """
-        Discriminator forward pass
-
-        Params:
-        
-            :gen_out: The output (filled masks) from the generator
-            :attention_mask: The attention mask for ignoring
-                             padded tokens
-
-        Returns:
-
-            :logits_ignore_pad: The logits with pad tokens ignored
-        """
-        float_mask = attention_mask.float().masked_fill(attention_mask == 0, float('-inf'))
-        logits_ignore_pad = torch.where(float_mask == float('-inf'), gen_out, float_mask)
-        return logits_ignore_pad
-
 # Set device and send model instantiation to it
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = DebertaV3GDES().to(device)
+model = DebertaV3GDES(model_id).to(device)
 if args.compile:
     print("Compile activated. Compiling model with max-autotune...")
     torch._dynamo.reset()
