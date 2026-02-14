@@ -1,8 +1,4 @@
-# A little script to run ELECTRA-style training
-# with GDES using native PyTorch on a
-# HuggingFace Transformers model
-
-# @author: Richard Yue
+# Training and eval functions for the trainer
 
 import copy
 
