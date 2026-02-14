@@ -17,6 +17,7 @@ parser.add_argument("-ep", "--epochs", help="Number of training epochs", type=in
 parser.add_argument("-lr", "--learning_rate", help="Learning rate for training", type=float)
 parser.add_argument("-wd", "--weight_decay", help="Weight decay regularization for the Adam optimizer", type=float)
 parser.add_argument("-g", "--gamma", help="Gamma value for exponential lr scheduler", type=float)
+parser.add_argument("-c", "--compile", help="Runs torch.compile with max-autotune if active", action=argparse.BooleanOptionalAction)
 parser.add_argument("--fp16", action=argparse.BooleanOptionalAction)
 parser.add_argument("--bf16", action=argparse.BooleanOptionalAction)
 
@@ -141,10 +142,12 @@ class DebertaV3GDES(nn.Module):
 # Set device and send model instantiation to it
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = DebertaV3GDES().to(device)
-torch._dynamo.reset()
-model.deberta = torch.compile(model.deberta, fullgraph=True, mode='max-autotune')
-torch.cuda.synchronize()
-print("Model compiled!")
+if args.compile:
+    print("Compile activated. Compiling model with max-autotune...")
+    torch._dynamo.reset()
+    model.deberta = torch.compile(model.deberta, fullgraph=True, mode='max-autotune')
+    torch.cuda.synchronize()
+    print("Model compiled!")
 
 # Standard loss with BCE with logits for optimized discriminator processing
 loss_fn = nn.CrossEntropyLoss()

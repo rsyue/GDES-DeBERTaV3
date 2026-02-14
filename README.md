@@ -14,7 +14,7 @@ The training loop performs two forward passes per step:
 ## Installation
 
 ```bash
-git clone https://github.com/rsyue/GDES-DeBERTaV3.git
+git clone https://github.com/<your-username>/gdes-debertav3.git
 cd gdes-debertav3
 pip install -r requirements.txt
 ```
@@ -58,6 +58,7 @@ python train.py \
 | `--gamma` | `-g` | `float` | `0.9` | Gamma for exponential LR scheduler |
 | `--fp16` | | `flag` | `False` | Enable FP16 mixed precision |
 | `--bf16` | | `flag` | `False` | Enable BF16 mixed precision |
+| `--compile` | `-c` | `flag` | `False` | Run `torch.compile` with `max-autotune` mode |
 
 ### Training Details
 
