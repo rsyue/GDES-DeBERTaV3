@@ -5,8 +5,9 @@
 # @author: Richard Yue
 
 import copy
-
 import argparse
+
+from gdes.utils import MixedPrecisionSelectionError
 
 parser = argparse.ArgumentParser()
 
@@ -22,11 +23,6 @@ parser.add_argument("--fp16", action=argparse.BooleanOptionalAction)
 parser.add_argument("--bf16", action=argparse.BooleanOptionalAction)
 
 args = parser.parse_args()
-
-class MixedPrecisionSelectionError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-        print("Cannot select multiple mixed precision settings at once")
 
 if args.fp16 and args.bf16:
     raise MixedPrecisionSelectionError("Select only fp16 or bf16")
@@ -47,9 +43,9 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from tqdm.auto import tqdm
 
-from model import DebertaV3GDES
-from data import get_dataloaders_and_tokenizer
-from trainer import train, eval
+from gdes.model import DebertaV3GDES
+from gdes.data import get_dataloaders_and_tokenizer
+from gdes.trainer import train, eval
 
 model = args.model if args.model else "microsoft/deberta-v3-base"
 batch_size = int(args.batch_size) if args.batch_size else 8
