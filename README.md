@@ -14,15 +14,15 @@ The training loop performs two forward passes per step:
 ## Installation
 
 ```bash
-git clone https://github.com/rsyue/GDES-DeBERTaV3
-cd gdes-debertav3
+git clone https://github.com/rsyue/rtd-gdes
+cd rtd-gdes
 pip install -r requirements.txt
 ```
 
 ### Requirements
 
 - Python ≥ 3.10
-- PyTorch ≥ 2.0
+- PyTorch ≥ 2.0 (CUDA recommended, ROCm builds supported)
 - Transformers
 - Datasets
 - Safetensors
