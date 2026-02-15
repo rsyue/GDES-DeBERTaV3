@@ -1,4 +1,5 @@
 # Output from runs
+runs/
 *.out
 *.err
 
