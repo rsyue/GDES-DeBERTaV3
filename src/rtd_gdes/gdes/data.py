@@ -1,39 +1,65 @@
-# Data loading and collating
-# classes, methods, and functions
+"""Data loading and collation for the GDES pretraining pipeline."""
 
-from transformers import DebertaV2Tokenizer, DataCollatorForLanguageModeling
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-import os
+from transformers import DataCollatorForLanguageModeling, DebertaV2Tokenizer
 
-def get_dataloaders_and_tokenizer(model_id, batch_size, test_size=0.1):
-    # Load a fast tokenizer, note that V3 is not available so we use V2
-    tokenizer = DebertaV2Tokenizer.from_pretrained(model_id, is_fast=True)
+from rtd_gdes.config import TrainConfig
 
-    # Grab the IMDB dataset for unsupervised training
-    # and siphon off 10% of data for tok class eval
-    dataset = load_dataset("imdb", split="unsupervised")
-    dataset = dataset.train_test_split(test_size=0.1)
-    print(dataset)
 
-    # Tokenize function, truncate at 512, pad, and copy input ids as
-    # ground truth for masked text
-    def tokenize(batch):
-        tokenized = tokenizer(batch["text"], truncation=True, max_length=512, padding=True)
-        tokenized["labels"] = tokenized["input_ids"]
+def get_dataloaders_and_tokenizer(
+    cfg: TrainConfig,
+) -> tuple[DataLoader, DataLoader, DebertaV2Tokenizer]:
+    """
+    Build train and eval DataLoaders along with the matching tokenizer.
+
+    The dataset name and split, tokenisation options, and worker count are all
+    driven by ``cfg`` so that this function is fully configurable and testable
+    without touching global state.
+
+    Args:
+        cfg: A populated :class:`TrainConfig` instance.
+
+    Returns:
+        A three-tuple of ``(train_dataloader, eval_dataloader, tokenizer)``.
+    """
+    # DeBERTa-v3 does not ship a fast tokeniser, so we fall back to v2.
+    tokenizer: DebertaV2Tokenizer = DebertaV2Tokenizer.from_pretrained(cfg.model_id)
+
+    dataset = load_dataset(cfg.dataset_name, split=cfg.dataset_split)
+    dataset = dataset.train_test_split(test_size=cfg.test_size)
+
+    def _tokenize(batch: dict) -> dict:
+        tokenized = tokenizer(
+            batch["text"],
+            truncation=True,
+            max_length=cfg.max_length,
+            padding=True,
+        )
+        # Labels are a copy of input_ids; the MLM collator will overwrite
+        # masked positions with -100 so they are ignored by the loss.
+        tokenized["labels"] = tokenized["input_ids"].copy()
         return tokenized
 
-    # Batch map tokenization and remove non-numerical columns
-    tokenized_dataset = dataset.map(tokenize, batched=True, remove_columns=["text", "label"])
-    tokenized_dataset.set_format("torch")
+    tokenized = dataset.map(_tokenize, batched=True, remove_columns=["text", "label"])
+    tokenized.set_format("torch")
 
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, return_tensors="pt")
+    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, return_tensors="pt")
 
-    # Determine num cpus for workers
-    num_workers = os.cpu_count()
-    
-    # Create dataloaders with the mlm collator
-    train_dataloader = DataLoader(tokenized_dataset["train"], batch_size=batch_size, collate_fn=data_collator, shuffle=True, num_workers=num_workers, pin_memory=True)
-    eval_dataloader = DataLoader(tokenized_dataset["test"], batch_size=batch_size, collate_fn=data_collator, num_workers=num_workers, pin_memory=True)
+    train_loader = DataLoader(
+        tokenized["train"],
+        batch_size=cfg.batch_size,
+        collate_fn=collator,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+        pin_memory=True,
+    )
+    eval_loader = DataLoader(
+        tokenized["test"],
+        batch_size=cfg.batch_size,
+        collate_fn=collator,
+        num_workers=cfg.num_workers,
+        pin_memory=True,
+    )
 
-    return train_dataloader, eval_dataloader, tokenizer
+    return train_loader, eval_loader, tokenizer

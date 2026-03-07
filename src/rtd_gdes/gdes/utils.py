@@ -1,7 +1,8 @@
-# Utilities for GDES
-# e.g. exceptions
+"""Utility helpers for the GDES training pipeline."""
+
 
 class MixedPrecisionSelectionError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-        print("Cannot select multiple mixed precision settings at once")
+    """Raised when both fp16 and bf16 are requested simultaneously."""
+
+    def __init__(self, msg: str) -> None:
+        super().__init__(msg)

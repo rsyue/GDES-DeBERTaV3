@@ -16,8 +16,40 @@ The training loop performs two forward passes per step:
 ```bash
 git clone https://github.com/rsyue/rtd-gdes
 cd rtd-gdes
-pip install -r requirements.txt
 ```
+
+For most users, a standard install is all that's needed:
+
+```bash
+pip install .
+```
+
+### Platform-specific installation
+
+For NVIDIA Jetson and AMD GFX 1151 targets, use `setup_env.py` instead. It reads the `TARGET` environment variable to select the correct package index and architecture flags, then calls `pip install .` with the right options on your behalf. Custom indexes are queried first; PyPI is used as a fallback.
+
+```bash
+# NVIDIA Jetson Orin Nano
+TARGET=jetson python setup_env.py
+
+# AMD GFX 1151 (ROCm)
+TARGET=amd-gfx1151 python setup_env.py
+
+# Auto-detect Jetson hardware (no TARGET needed)
+python setup_env.py
+```
+
+Append `--dev` to any command to also install development dependencies. CLI flags (`--jetson`, `--amd-gfx1151`, `--no-jetson`) are also supported and take precedence over `TARGET` if both are set.
+
+#### Environment variables
+
+| Variable | Values | Description |
+|---|---|---|
+| `TARGET` | `jetson`, `amd-gfx1151` | Selects the platform install mode. Read by `setup_env.py` at install time. |
+| `TORCH_CUDA_ARCH_LIST` | `8.7` | Set automatically for Jetson builds. Restricts CUDA kernel compilation to sm_87 (Ampere GA10B). |
+| `PYTORCH_ROCM_ARCH` | `gfx1151` | Set automatically for AMD builds. Restricts HIP/ROCm kernel compilation to GFX 1151. |
+
+These variables are injected into the pip subprocess only and do not persist in your shell environment.
 
 ### Requirements
 
@@ -32,7 +64,7 @@ pip install -r requirements.txt
 ## Quick Start
 
 ```bash
-python train.py \
+python -m rtd_gdes.train \
   --model microsoft/deberta-v3-base \
   --lambda_disc 0.5 \
   --batch_size 8 \
@@ -56,13 +88,14 @@ python train.py \
 | `--learning_rate` | `-lr` | `float` | `2e-5` | Learning rate for AdamW |
 | `--weight_decay` | `-wd` | `float` | `0.01` | Weight decay for AdamW |
 | `--gamma` | `-g` | `float` | `0.9` | Gamma for exponential LR scheduler |
+| `--dataset` | | `str` | `imdb` | HuggingFace dataset name |
 | `--fp16` | | `flag` | `False` | Enable FP16 mixed precision |
 | `--bf16` | | `flag` | `False` | Enable BF16 mixed precision |
 | `--compile` | `-c` | `flag` | `False` | Run `torch.compile` with `max-autotune` mode |
 
 ### Training Details
 
-The script trains on the [IMDB unsupervised split](https://huggingface.co/datasets/imdb) with a 90/10 train/eval split. The combined loss is computed as:
+The script trains on the [IMDB unsupervised split](https://huggingface.co/datasets/imdb) by default, with a configurable 90/10 train/eval split. The dataset can be changed via `--dataset`. The combined loss is computed as:
 
 $$\mathcal{L} = \mathcal{L}_{\text{gen}} + \lambda \cdot \mathcal{L}_{\text{disc}}$$
 
@@ -74,10 +107,42 @@ Evaluation reports discriminator loss, accuracy, and F1 score on the held-out se
 
 After training, the model and tokenizer are saved to a directory named after the model (e.g., `deberta_v3_base_gdes/`).
 
+## Development
+
+Install with dev dependencies:
+
+```bash
+python setup_env.py --dev
+```
+
+Run the test suite:
+
+```bash
+pytest tests/ -v --cov=rtd_gdes
+```
+
+## Project Structure
+
+```
+rtd-gdes/
+├── src/
+│   └── rtd_gdes/
+│       ├── config.py          # TrainConfig dataclass — all hyperparameter defaults
+│       ├── train.py           # Entry point and CLI
+│       └── gdes/
+│           ├── data.py        # Dataset loading and DataLoader construction
+│           ├── model.py       # DebertaV3GDES — generator + discriminator
+│           ├── trainer.py     # train_one_epoch and evaluate loops
+│           └── utils.py       # Shared exceptions
+├── tests/
+│   ├── test_gdes.py           # Model, trainer, and config unit + integration tests
+│   └── test_setup_env.py      # Platform detection and install logic tests
+├── setup_env.py               # Hardware-aware install helper
+└── pyproject.toml
+```
+
 ## Roadmap
 
-- [ ] Modularize into library structure (`gdes/model.py`, `gdes/trainer.py`, etc.)
-- [ ] Add configurable dataset support
 - [ ] Distributed training (DDP / FSDP)
 - [ ] Publish as PyPI package
 - [ ] Support additional model architectures beyond DeBERTaV3
