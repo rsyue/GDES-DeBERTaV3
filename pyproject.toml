@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rtd-gdes"
+version = "0.1.0"
+description = "ELECTRA-style RTD pretraining with Gradient-Disentangled Embedding Sharing (GDES)"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "transformers",
+    "datasets",
+    "safetensors",
+    "scikit-learn",
+    "tqdm",
+    "accelerate",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "black"]
+# Jetson and AMD deps are installed via setup_env.py, which sets the correct
+# primary index and arch env vars. Listed here for documentation only —
+# do not pip install these groups directly.
+jetson = []
+amd-gfx1151 = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "UP"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rtd_gdes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
