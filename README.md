@@ -18,6 +18,14 @@ git clone https://github.com/rsyue/rtd-gdes
 cd rtd-gdes
 ```
 
+We recommend using UV as your package manager. If you would like to use UV, you can speed up installs with uv pip:
+
+```bash
+uv pip install .
+```
+
+If you are using another package manager (e.g. conda or local pip), you can install via pip classic:
+
 ```bash
 pip install .
 ```
