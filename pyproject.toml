@@ -15,6 +15,9 @@ dependencies = [
     "scikit-learn",
     "tqdm",
     "accelerate",
+    "sentencepiece",
+    "tiktoken",
+    "protobuf",
 ]
 
 [project.optional-dependencies]
