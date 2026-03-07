@@ -18,38 +18,15 @@ git clone https://github.com/rsyue/rtd-gdes
 cd rtd-gdes
 ```
 
-For most users, a standard install is all that's needed:
-
 ```bash
 pip install .
 ```
 
-### Platform-specific installation
-
-For NVIDIA Jetson and AMD GFX 1151 targets, use `setup_env.py` instead. It reads the `TARGET` environment variable to select the correct package index and architecture flags, then calls `pip install .` with the right options on your behalf. Custom indexes are queried first; PyPI is used as a fallback.
+If you intend to contribute or modify the source, an editable install is recommended so changes are reflected immediately without reinstalling:
 
 ```bash
-# NVIDIA Jetson Orin Nano
-TARGET=jetson python setup_env.py
-
-# AMD GFX 1151 (ROCm)
-TARGET=amd-gfx1151 python setup_env.py
-
-# Auto-detect Jetson hardware (no TARGET needed)
-python setup_env.py
+pip install -e .
 ```
-
-Append `--dev` to any command to also install development dependencies. CLI flags (`--jetson`, `--amd-gfx1151`, `--no-jetson`) are also supported and take precedence over `TARGET` if both are set.
-
-#### Environment variables
-
-| Variable | Values | Description |
-|---|---|---|
-| `TARGET` | `jetson`, `amd-gfx1151` | Selects the platform install mode. Read by `setup_env.py` at install time. |
-| `TORCH_CUDA_ARCH_LIST` | `8.7` | Set automatically for Jetson builds. Restricts CUDA kernel compilation to sm_87 (Ampere GA10B). |
-| `PYTORCH_ROCM_ARCH` | `gfx1151` | Set automatically for AMD builds. Restricts HIP/ROCm kernel compilation to GFX 1151. |
-
-These variables are injected into the pip subprocess only and do not persist in your shell environment.
 
 ### Requirements
 
@@ -112,7 +89,7 @@ After training, the model and tokenizer are saved to a directory named after the
 Install with dev dependencies:
 
 ```bash
-python setup_env.py --dev
+pip install -e ".[dev]"
 ```
 
 Run the test suite:
@@ -135,9 +112,7 @@ rtd-gdes/
 │           ├── trainer.py     # train_one_epoch and evaluate loops
 │           └── utils.py       # Shared exceptions
 ├── tests/
-│   ├── test_gdes.py           # Model, trainer, and config unit + integration tests
-│   └── test_setup_env.py      # Platform detection and install logic tests
-├── setup_env.py               # Hardware-aware install helper
+│   └── test_gdes.py           # Model, trainer, and config unit + integration tests
 └── pyproject.toml
 ```
 
