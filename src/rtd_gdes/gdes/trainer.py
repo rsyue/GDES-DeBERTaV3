@@ -123,9 +123,13 @@ def train_one_epoch(
 
         # scaler.scale() / scaler.step() are no-ops when the scaler is
         # disabled (BF16 or FP32), so this branch handles all three dtypes.
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
         optimizer.zero_grad()
 
         progress.set_postfix(loss=f"{loss.item():.4f}")
