@@ -7,7 +7,6 @@ python -m rtd_gdes.train --help
 """
 
 import argparse
-import os
 
 import torch
 
@@ -19,9 +18,7 @@ from rtd_gdes.gdes.utils import MixedPrecisionSelectionError
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="ELECTRA-style RTD pretraining with GDES on DeBERTaV3."
-    )
+    p = argparse.ArgumentParser(description="ELECTRA-style RTD pretraining with GDES on DeBERTaV3.")
     p.add_argument("-m", "--model", type=str, help="HuggingFace model id")
     p.add_argument("-ld", "--lambda_disc", type=float, help="Discriminator loss weight")
     p.add_argument("-bs", "--batch_size", type=int, help="Batch size")
@@ -34,8 +31,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--fp16", action="store_true", default=False, help="Enable FP16")
     p.add_argument("--bf16", action="store_true", default=False, help="Enable BF16")
     p.add_argument(
-        "-c", "--compile", action="store_true", default=False,
-        help="torch.compile with max-autotune"
+        "-c",
+        "--compile",
+        action="store_true",
+        default=False,
+        help="torch.compile with max-autotune",
     )
     return p.parse_args()
 
@@ -107,8 +107,15 @@ def main() -> None:
     for epoch in range(1, cfg.epochs + 1):
         print(f"Epoch {epoch}/{cfg.epochs} {'─' * 48}")
         train_one_epoch(
-            tokenizer, train_loader, model, cfg.lambda_disc,
-            optimizer, scheduler, dtype, scaler, device,
+            tokenizer,
+            train_loader,
+            model,
+            cfg.lambda_disc,
+            optimizer,
+            scheduler,
+            dtype,
+            scaler,
+            device,
         )
         evaluate(tokenizer, eval_loader, model, cfg.lambda_disc, dtype, device)
         print()

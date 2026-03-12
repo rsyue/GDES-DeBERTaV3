@@ -12,6 +12,7 @@ from transformers.models.deberta_v2.tokenization_deberta_v2 import DebertaV2Toke
 
 from rtd_gdes.gdes.model import DebertaV3GDES
 
+
 def _disc_loss(
     logits: torch.Tensor,
     labels: torch.Tensor,
@@ -115,9 +116,7 @@ def train_one_epoch(
                 input_ids=filled_ids,
                 attention_mask=batch.attention_mask,
             )
-            disc_loss: torch.Tensor = _disc_loss(
-                disc_logits, disc_labels, batch.attention_mask
-            )
+            disc_loss: torch.Tensor = _disc_loss(disc_logits, disc_labels, batch.attention_mask)
 
         loss = gen_loss + lambda_disc * disc_loss
 

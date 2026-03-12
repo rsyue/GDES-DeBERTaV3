@@ -5,17 +5,16 @@ Run with:
     pytest tests/ -v --cov=rtd_gdes
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
-from unittest.mock import MagicMock, patch
 
 from rtd_gdes.config import TrainConfig
 from rtd_gdes.gdes.model import DebertaV3GDES
-from rtd_gdes.gdes.trainer import _build_disc_labels, train_one_epoch, evaluate
+from rtd_gdes.gdes.trainer import _build_disc_labels, evaluate, train_one_epoch
 from rtd_gdes.gdes.utils import MixedPrecisionSelectionError
-
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -48,6 +47,7 @@ def dummy_attention_mask() -> torch.Tensor:
 # Config tests
 # ───────────────────────────────────────────────────────────────────────────────
 
+
 class TestTrainConfig:
     def test_defaults_are_valid(self):
         cfg = TrainConfig()
@@ -71,6 +71,7 @@ class TestTrainConfig:
 # Utils tests
 # ───────────────────────────────────────────────────────────────────────────────
 
+
 class TestUtils:
     def test_mixed_precision_error_is_exception(self):
         with pytest.raises(MixedPrecisionSelectionError):
@@ -84,6 +85,7 @@ class TestUtils:
 # ───────────────────────────────────────────────────────────────────────────────
 # Trainer helper tests
 # ───────────────────────────────────────────────────────────────────────────────
+
 
 class TestBuildDiscLabels:
     MASK_ID = 128000
@@ -113,6 +115,7 @@ class TestBuildDiscLabels:
 # ───────────────────────────────────────────────────────────────────────────────
 # Model tests
 # ───────────────────────────────────────────────────────────────────────────────
+
 
 class TestDebertaV3GDES:
     def test_disc_head_is_linear(self, model):
@@ -198,6 +201,7 @@ class TestDebertaV3GDES:
 # Integration: single training step
 # ───────────────────────────────────────────────────────────────────────────────
 
+
 class TestIntegration:
     """Smoke-test a full train step and eval pass without crashing."""
 
@@ -259,10 +263,15 @@ class TestIntegration:
         scaler = torch.amp.GradScaler(device="cpu")
 
         train_one_epoch(
-            tokenizer, loader, model,
-            lambda_disc=0.5, optimizer=optimizer,
-            scheduler=scheduler, dtype=torch.float32,
-            scaler=scaler, device=torch.device("cpu"),
+            tokenizer,
+            loader,
+            model,
+            lambda_disc=0.5,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            dtype=torch.float32,
+            scaler=scaler,
+            device=torch.device("cpu"),
         )
 
     def test_evaluate_returns_expected_keys(self, model):
@@ -272,8 +281,11 @@ class TestIntegration:
         loader = self._make_loader(self._make_batch())
 
         results = evaluate(
-            tokenizer, loader, model,
-            lambda_disc=0.5, dtype=torch.float32,
+            tokenizer,
+            loader,
+            model,
+            lambda_disc=0.5,
+            dtype=torch.float32,
             device=torch.device("cpu"),
         )
         assert set(results.keys()) == {"eval_loss", "accuracy", "f1"}

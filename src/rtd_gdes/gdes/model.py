@@ -9,8 +9,8 @@ the core of Gradient-Disentangled Embedding Sharing (GDES).
 
 import torch
 import torch.nn as nn
-from transformers.models.deberta_v2.modeling_deberta_v2 import DebertaV2ForMaskedLM
 from transformers.modeling_outputs import MaskedLMOutput
+from transformers.models.deberta_v2.modeling_deberta_v2 import DebertaV2ForMaskedLM
 
 
 class DebertaV3GDES(nn.Module):
@@ -32,9 +32,7 @@ class DebertaV3GDES(nn.Module):
         # Force FP32 regardless of the checkpoint's saved dtype.
         # GradScaler requires FP32 master weights — autocast handles the
         # FP16 cast during the forward pass only.
-        self.deberta = DebertaV2ForMaskedLM.from_pretrained(
-            model_id, torch_dtype=torch.float32
-        )
+        self.deberta = DebertaV2ForMaskedLM.from_pretrained(model_id, torch_dtype=torch.float32)
         hidden_size: int = self.deberta.config.hidden_size
         self.disc_head = nn.Linear(hidden_size, 1)
 

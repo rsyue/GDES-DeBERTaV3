@@ -11,22 +11,36 @@ dependencies = [
     "torch>=2.0",
     "transformers",
     "datasets",
-    "safetensors",
     "scikit-learn",
     "tqdm",
     "accelerate",
     "sentencepiece",
-    "tiktoken",
-    "protobuf",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "black"]
+dev = ["pytest", "pytest-cov", "ruff", "black", "mypy", "types-tqdm"]
 # Jetson and AMD deps are installed via setup_env.py, which sets the correct
 # primary index and arch env vars. Listed here for documentation only —
 # do not pip install these groups directly.
 jetson = []
 amd-gfx1151 = []
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+# Third-party libraries that don't ship stubs or py.typed markers.
+# sklearn and datasets have no stub packages available.
+[[tool.mypy.overrides]]
+module = [
+    "sklearn.*",
+    "datasets.*",
+    "transformers.*",
+    "torch.*",
+    "accelerate.*",
+]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100
@@ -39,6 +53,7 @@ target-version = ["py310"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rtd_gdes"]
+include = ["src/rtd_gdes/py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
