@@ -4,12 +4,41 @@ from typing import Any
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F  # noqa: F401 — used via nn.functional in _disc_loss
 from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-from transformers import DebertaV2Tokenizer
+from transformers.models.deberta_v2.tokenization_deberta_v2 import DebertaV2Tokenizer
 
 from rtd_gdes.gdes.model import DebertaV3GDES
+
+def _disc_loss(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute BCEWithLogitsLoss over non-padding positions only.
+
+    Padding positions (attention_mask == 0) are excluded via a per-token
+    weight tensor rather than masking logits to -inf, which would produce
+    NaN gradients via log(sigmoid(-inf)).
+
+    Args:
+        logits:         Shape ``(B, T)``.
+        labels:         Float tensor of shape ``(B, T)``.
+        attention_mask: Binary mask of shape ``(B, T)``; 0 for padding.
+
+    Returns:
+        Scalar loss averaged over non-padding positions.
+    """
+    weight = attention_mask.float()
+    loss = nn.functional.binary_cross_entropy_with_logits(
+        logits, labels, weight=weight, reduction="sum"
+    )
+    # Normalise by the number of non-padding tokens to get a true mean.
+    return loss / weight.sum().clamp(min=1)
+
 
 _disc_loss_fn = nn.BCEWithLogitsLoss()
 
@@ -86,10 +115,14 @@ def train_one_epoch(
                 input_ids=filled_ids,
                 attention_mask=batch.attention_mask,
             )
-            disc_loss: torch.Tensor = _disc_loss_fn(disc_logits, disc_labels)
+            disc_loss: torch.Tensor = _disc_loss(
+                disc_logits, disc_labels, batch.attention_mask
+            )
 
         loss = gen_loss + lambda_disc * disc_loss
 
+        # scaler.scale() / scaler.step() are no-ops when the scaler is
+        # disabled (BF16 or FP32), so this branch handles all three dtypes.
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
@@ -135,7 +168,7 @@ def evaluate(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        with torch.autocast(device_type=device.type, dtype=dtype):
+        with torch.autocast(device_type=device.type, dtype=dtype, enabled=dtype == torch.float16):
             gen_out = model.forward_gen(**batch)
             filled_ids = gen_out.logits.argmax(dim=-1)
 
@@ -143,11 +176,11 @@ def evaluate(
                 input_ids=filled_ids,
                 attention_mask=batch.attention_mask,
             )
-            disc_loss = _disc_loss_fn(disc_logits, disc_labels)
+            disc_loss = _disc_loss(disc_logits, disc_labels, batch.attention_mask)
 
         total_loss += disc_loss.item()
 
-        # Exclude padding (logit == -inf) from metrics.
+        # Exclude padding from metrics.
         valid = batch.attention_mask.bool().view(-1)
         preds = (torch.sigmoid(disc_logits).view(-1)[valid] > 0.5).int().cpu().tolist()
         labels = disc_labels.view(-1)[valid].int().cpu().tolist()

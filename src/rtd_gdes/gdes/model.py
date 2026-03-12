@@ -9,7 +9,7 @@ the core of Gradient-Disentangled Embedding Sharing (GDES).
 
 import torch
 import torch.nn as nn
-from transformers import DebertaV2ForMaskedLM
+from transformers.models.deberta_v2.modeling_deberta_v2 import DebertaV2ForMaskedLM
 from transformers.modeling_outputs import MaskedLMOutput
 
 
@@ -29,7 +29,12 @@ class DebertaV3GDES(nn.Module):
 
     def __init__(self, model_id: str) -> None:
         super().__init__()
-        self.deberta = DebertaV2ForMaskedLM.from_pretrained(model_id)
+        # Force FP32 regardless of the checkpoint's saved dtype.
+        # GradScaler requires FP32 master weights — autocast handles the
+        # FP16 cast during the forward pass only.
+        self.deberta = DebertaV2ForMaskedLM.from_pretrained(
+            model_id, torch_dtype=torch.float32
+        )
         hidden_size: int = self.deberta.config.hidden_size
         self.disc_head = nn.Linear(hidden_size, 1)
 
@@ -102,9 +107,16 @@ class DebertaV3GDES(nn.Module):
 
         self.unfreeze_embeddings()
 
-        logits = self.disc_head(hidden_states).squeeze(-1)  # (B, T)
+        # Cast hidden states to float32 for the disc_head matmul to avoid
+        # dtype mismatches, then cast the result back to the backbone dtype.
+        # Mutating disc_head.to(dtype) in-place during forward breaks the
+        # GradScaler's gradient tracking under FP16 autocast.
+        logits = self.disc_head(hidden_states.float()).to(hidden_states.dtype)
+        logits = logits.squeeze(-1)  # (B, T)
 
-        # Mask out padding so BCEWithLogitsLoss ignores those positions.
-        logits = logits.masked_fill(attention_mask == 0, float("-inf"))
+        # Zero out padding logits rather than -inf so BCEWithLogitsLoss does
+        # not produce NaN (log(sigmoid(-inf)) = -inf, which poisons the mean).
+        # The loss itself must mask padding via a weight tensor — see trainer.py.
+        logits = logits.masked_fill(attention_mask == 0, 0.0)
 
         return logits
