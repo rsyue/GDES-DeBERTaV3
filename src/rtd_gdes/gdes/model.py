@@ -9,8 +9,8 @@ the core of Gradient-Disentangled Embedding Sharing (GDES).
 
 import torch
 import torch.nn as nn
-from transformers.models.deberta_v2.modeling_deberta_v2 import DebertaV2ForMaskedLM
 from transformers.modeling_outputs import MaskedLMOutput
+from transformers.models.deberta_v2.modeling_deberta_v2 import DebertaV2ForMaskedLM
 
 
 class DebertaV3GDES(nn.Module):
@@ -109,9 +109,9 @@ class DebertaV3GDES(nn.Module):
         # Cast input to float32 for the disc_head matmul; cast output back.
         # Mutating disc_head.to(dtype) in-place during forward breaks
         # GradScaler's gradient tracking under FP16 autocast.
-        logits: torch.Tensor = self.disc_head(
-            hidden_states.float()
-        ).to(hidden_states.dtype).squeeze(-1)  # (B, T)
+        logits: torch.Tensor = (
+            self.disc_head(hidden_states.float()).to(hidden_states.dtype).squeeze(-1)
+        )  # (B, T)
 
         # Zero out padding positions rather than -inf to prevent NaN in
         # BCEWithLogitsLoss. Padding is excluded via weights in _disc_loss.

@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 import torch
 import torch.nn as nn
+from torch.cuda.amp import GradScaler
 
 from rtd_gdes.config import TrainConfig
 from rtd_gdes.gdes.model import DebertaV3GDES
@@ -312,7 +313,7 @@ class TestIntegration:
             optimizer=optimizer,
             scheduler=scheduler,
             dtype=torch.float32,
-            scaler=None,
+            scaler=GradScaler(enabled=False),
             device=torch.device("cpu"),
         )
 

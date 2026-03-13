@@ -5,8 +5,18 @@ build-backend = "hatchling.build"
 [project]
 name = "rtd-gdes"
 version = "0.1.0"
+authors = [
+  { name="Richard Samuel Yue", email="richard.samuel.yue@outlook.com" },
+]
 description = "ELECTRA-style RTD pretraining with Gradient-Disentangled Embedding Sharing (GDES)"
+readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "torch>=2.0",
     "transformers",
@@ -59,3 +69,7 @@ include = ["src/rtd_gdes/py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[project.urls]
+Homepage = "https://github.com/rsyue/rtd-gdes"
+Issues = "https://github.com/rsyue/rtd-gdes/issues"

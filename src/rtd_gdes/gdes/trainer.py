@@ -4,10 +4,10 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, f1_score  # type: ignore[import-untyped]
+from sklearn.metrics import accuracy_score, f1_score
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm  # type: ignore[import-untyped]
+from tqdm.auto import tqdm
 from transformers.models.deberta_v2.tokenization_deberta_v2 import DebertaV2Tokenizer
 
 from rtd_gdes.gdes.model import DebertaV3GDES
@@ -48,9 +48,7 @@ def _disc_loss(
         Scalar loss averaged over non-padding positions.
     """
     weight = attention_mask.float()
-    loss = F.binary_cross_entropy_with_logits(
-        logits, labels, weight=weight, reduction="sum"
-    )
+    loss = F.binary_cross_entropy_with_logits(logits, labels, weight=weight, reduction="sum")
     return loss / weight.sum().clamp(min=1)
 
 
@@ -94,10 +92,11 @@ def train_one_epoch(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        with torch.amp.autocast(device_type=device.type, dtype=dtype):
+        with torch.autocast(device_type=device.type, dtype=dtype):
             gen_out = model.forward_gen(**batch)
-            gen_loss: torch.Tensor = gen_out.loss  # type: ignore[assignment]
-            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)  # type: ignore[union-attr]
+            assert gen_out.loss is not None and gen_out.logits is not None
+            gen_loss: torch.Tensor = gen_out.loss
+            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)
 
             disc_logits = model.forward_disc(
                 input_ids=filled_ids,
@@ -106,7 +105,7 @@ def train_one_epoch(
             disc_loss = _disc_loss(disc_logits, disc_labels, batch.attention_mask)
             loss = gen_loss + lambda_disc * disc_loss
 
-        scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
+        scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
@@ -150,9 +149,10 @@ def evaluate(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        with torch.amp.autocast(device_type=device.type, dtype=dtype):
+        with torch.autocast(device_type=device.type, dtype=dtype):
             gen_out = model.forward_gen(**batch)
-            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)  # type: ignore[union-attr]
+            assert gen_out.logits is not None
+            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)
 
             disc_logits = model.forward_disc(
                 input_ids=filled_ids,

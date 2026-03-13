@@ -21,9 +21,7 @@ from rtd_gdes.gdes.utils import MixedPrecisionSelectionError
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="ELECTRA-style RTD pretraining with GDES on DeBERTaV3."
-    )
+    p = argparse.ArgumentParser(description="ELECTRA-style RTD pretraining with GDES on DeBERTaV3.")
     p.add_argument("-m", "--model", type=str, help="HuggingFace model id")
     p.add_argument("-ld", "--lambda_disc", type=float, help="Discriminator loss weight")
     p.add_argument("-bs", "--batch_size", type=int, help="Batch size")
@@ -33,19 +31,28 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("-g", "--gamma", type=float, help="ExponentialLR gamma")
     p.add_argument("-nw", "--num_workers", type=int, help="DataLoader worker count")
     p.add_argument("--dataset", type=str, help="HuggingFace dataset name (default: imdb)")
+    p.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        default=None,
+        help="Directory to save the model and tokenizer. "
+        "Saved under <output_dir>/<save_name>/. Defaults to ./<save_name>/.",
+    )
     p.add_argument("--fp16", action="store_true", default=False, help="Enable FP16")
     p.add_argument("--bf16", action="store_true", default=False, help="Enable BF16")
     p.add_argument(
-        "-o", "--output_dir", type=str, default=None,
-        help="Directory to save the model and tokenizer. "
-             "Saved under <output_dir>/<save_name>/. Defaults to ./<save_name>/."
+        "-c",
+        "--compile",
+        action="store_true",
+        default=False,
+        help="torch.compile with max-autotune",
     )
     return p.parse_args()
 
 
 def _build_config(args: argparse.Namespace) -> TrainConfig:
     """Merge CLI overrides onto the default :class:`TrainConfig`."""
-    # Map CLI arg names to TrainConfig field names where they differ.
     rename: dict[str, str] = {
         "model": "model_id",
         "dataset": "dataset_name",
@@ -62,7 +69,7 @@ def _build_config(args: argparse.Namespace) -> TrainConfig:
 
 
 def main() -> None:
-    args = _parse_args()
+    args: argparse.Namespace = _parse_args()
 
     if args.fp16 and args.bf16:
         raise MixedPrecisionSelectionError("Select only fp16 or bf16, not both.")
@@ -117,8 +124,15 @@ def main() -> None:
     for epoch in range(1, cfg.epochs + 1):
         print(f"Epoch {epoch}/{cfg.epochs} {'─' * 48}")
         train_one_epoch(
-            tokenizer, train_loader, model, cfg.lambda_disc,
-            optimizer, scheduler, dtype, scaler, device,
+            tokenizer,
+            train_loader,
+            model,
+            cfg.lambda_disc,
+            optimizer,
+            scheduler,
+            dtype,
+            scaler,
+            device,
         )
         evaluate(tokenizer, eval_loader, model, cfg.lambda_disc, dtype, device)
         print()
@@ -126,13 +140,13 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # Save                                                                 #
     # ------------------------------------------------------------------ #
-    prefix = "."
-    if args.output_dir:
-        prefix = output_dir
     save_name = cfg.model_id.replace("-", "_").split("/")[-1] + "_gdes"
-    model.deberta.save_pretrained(f"{prefix}/{save_name}")
-    tokenizer.save_pretrained(f"{prefix}/{save_name}")
-    print(f"Model and tokenizer saved to '{prefix}/{save_name}/'")
+    prefix: Path = Path(args.output_dir) if args.output_dir else Path(".")
+    save_path = prefix / save_name
+    save_path.mkdir(parents=True, exist_ok=True)
+    model.deberta.save_pretrained(save_path)
+    tokenizer.save_pretrained(save_path)
+    print(f"Model and tokenizer saved to '{save_path}'")
 
 
 if __name__ == "__main__":
