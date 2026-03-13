@@ -11,7 +11,7 @@ import dataclasses
 from pathlib import Path
 
 import torch
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 
 from rtd_gdes.config import TrainConfig
 from rtd_gdes.gdes.data import get_dataloaders_and_tokenizer
@@ -116,7 +116,7 @@ def main() -> None:
     # BF16 has the same exponent range as FP32 (8 bits) and does not require
     # loss scaling. FP16 has only 5 exponent bits and needs scaling to prevent
     # small gradients from underflowing to zero.
-    scaler: GradScaler = GradScaler(enabled=cfg.fp16)
+    scaler: GradScaler = GradScaler(str(device), enabled=cfg.fp16)
 
     # ------------------------------------------------------------------ #
     # Training loop                                                        #

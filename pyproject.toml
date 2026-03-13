@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rtd-gdes"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   { name="Richard Samuel Yue", email="richard.samuel.yue@outlook.com" },
 ]
@@ -18,13 +18,15 @@ classifiers = [
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 dependencies = [
-    "torch>=2.0",
+    "torch>=2.6.0",
     "transformers",
     "datasets",
     "scikit-learn",
     "tqdm",
     "accelerate",
     "sentencepiece",
+    "tiktoken",
+    "protobuf",
 ]
 
 [project.optional-dependencies]
