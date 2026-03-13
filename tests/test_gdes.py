@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler
+from torch.amp.grad_scaler import GradScaler
 
 from rtd_gdes.config import TrainConfig
 from rtd_gdes.gdes.model import DebertaV3GDES

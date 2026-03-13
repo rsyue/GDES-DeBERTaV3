@@ -11,7 +11,7 @@ import dataclasses
 from pathlib import Path
 
 import torch
-from torch.amp import GradScaler
+from torch.amp.grad_scaler import GradScaler
 
 from rtd_gdes.config import TrainConfig
 from rtd_gdes.gdes.data import get_dataloaders_and_tokenizer

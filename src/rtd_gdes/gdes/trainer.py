@@ -5,7 +5,7 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, f1_score
-from torch.cuda.amp import GradScaler
+from torch.amp.grad_scaler import GradScaler
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers.models.deberta_v2.tokenization_deberta_v2 import DebertaV2Tokenizer
@@ -105,7 +105,7 @@ def train_one_epoch(
             disc_loss = _disc_loss(disc_logits, disc_labels, batch.attention_mask)
             loss = gen_loss + lambda_disc * disc_loss
 
-        scaler.scale(loss).backward()
+        scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
