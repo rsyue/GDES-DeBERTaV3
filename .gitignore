@@ -3,5 +3,8 @@ runs/
 *.out
 *.err
 
+# Wheel builds for pypi
+dist/
+
 # pycache
 __pycache__
