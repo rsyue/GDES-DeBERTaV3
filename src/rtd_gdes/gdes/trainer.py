@@ -3,14 +3,28 @@
 from typing import Any
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F  # noqa: F401 — used via nn.functional in _disc_loss
-from sklearn.metrics import accuracy_score, f1_score
+import torch.nn.functional as F
+from sklearn.metrics import accuracy_score, f1_score  # type: ignore[import-untyped]
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm  # type: ignore[import-untyped]
 from transformers.models.deberta_v2.tokenization_deberta_v2 import DebertaV2Tokenizer
 
 from rtd_gdes.gdes.model import DebertaV3GDES
+
+
+def _build_disc_labels(input_ids: torch.Tensor, mask_token_id: int) -> torch.Tensor:
+    """
+    Return a float tensor marking which positions held a mask token.
+
+    Args:
+        input_ids:      Shape ``(B, T)``.
+        mask_token_id:  The tokenizer's mask token id.
+
+    Returns:
+        Float tensor of shape ``(B, T)``.
+    """
+    return (input_ids == mask_token_id).float()
 
 
 def _disc_loss(
@@ -34,66 +48,42 @@ def _disc_loss(
         Scalar loss averaged over non-padding positions.
     """
     weight = attention_mask.float()
-    loss = nn.functional.binary_cross_entropy_with_logits(
+    loss = F.binary_cross_entropy_with_logits(
         logits, labels, weight=weight, reduction="sum"
     )
-    # Normalise by the number of non-padding tokens to get a true mean.
     return loss / weight.sum().clamp(min=1)
-
-
-_disc_loss_fn = nn.BCEWithLogitsLoss()
-
-
-def _build_disc_labels(input_ids: torch.Tensor, mask_token_id: int) -> torch.Tensor:
-    """
-    Return a float tensor marking which positions held a mask token.
-
-    A position is labelled 1.0 (replaced) if it contained ``[MASK]`` in the
-    original masked input, and 0.0 (original) otherwise.
-
-    Args:
-        input_ids: Shape ``(B, T)``.
-        mask_token_id: The tokenizer's mask token id.
-
-    Returns:
-        Float tensor of shape ``(B, T)``.
-    """
-    return (input_ids == mask_token_id).float()
 
 
 def train_one_epoch(
     tokenizer: DebertaV2Tokenizer,
-    dataloader: DataLoader,
+    dataloader: DataLoader[Any],
     model: DebertaV3GDES,
     lambda_disc: float,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     dtype: torch.dtype,
-    scaler: torch.amp.GradScaler,
+    scaler: GradScaler,
     device: torch.device,
 ) -> None:
     """
     Run one full pass over ``dataloader``, updating ``model`` in place.
 
-    The combined loss is:
-
-    .. math::
-        \\mathcal{L} = \\mathcal{L}_{\\text{gen}} + \\lambda \\cdot \\mathcal{L}_{\\text{disc}}
-
-    Embedding parameters are frozen during the discriminator forward pass
-    (GDES disentanglement) and restored before the next generator step.
+    Both forward passes and loss calculation run inside a single autocast
+    block. The scaler is always passed in but constructed with
+    ``enabled=False`` for BF16/FP32 so its methods are no-ops.
 
     Args:
-        tokenizer: Used only to obtain ``mask_token_id``.
-        dataloader: Yields masked batches produced by
-            :class:`~transformers.DataCollatorForLanguageModeling`.
-        model: The :class:`DebertaV3GDES` instance to train.
-        lambda_disc: Scaling coefficient for the discriminator loss.
-        optimizer: An already-constructed :class:`~torch.optim.AdamW`.
-        scheduler: Exponential LR scheduler stepped once per epoch.
-        dtype: ``torch.float16``, ``torch.bfloat16``, or ``torch.float32``.
-        scaler: :class:`~torch.amp.GradScaler` for mixed-precision training.
-        device: Target device.
+        tokenizer:    Used only to obtain ``mask_token_id``.
+        dataloader:   Yields masked batches produced by
+                      :class:`~transformers.DataCollatorForLanguageModeling`.
+        model:        The :class:`DebertaV3GDES` instance to train.
+        lambda_disc:  Scaling coefficient for the discriminator loss.
+        optimizer:    An already-constructed :class:`~torch.optim.AdamW`.
+        scheduler:    Exponential LR scheduler stepped once per epoch.
+        dtype:        ``torch.float16``, ``torch.bfloat16``, or ``torch.float32``.
+        scaler:       :class:`~torch.cuda.amp.GradScaler` — enabled only for
+                      FP16, a no-op for BF16 and FP32.
+        device:       Target device.
     """
     model.train()
     progress = tqdm(dataloader, desc="train", leave=False)
@@ -102,33 +92,21 @@ def train_one_epoch(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        # ---- Generator pass ----------------------------------------
         with torch.autocast(device_type=device.type, dtype=dtype):
             gen_out = model.forward_gen(**batch)
-            gen_loss: torch.Tensor = gen_out.loss
-            # Greedy token predictions from the generator fill masked slots.
-            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)
+            gen_loss: torch.Tensor = gen_out.loss  # type: ignore[assignment]
+            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)  # type: ignore[union-attr]
 
-        # ---- Discriminator pass ------------------------------------
-        # Embeddings are frozen inside forward_disc (GDES step).
-        with torch.autocast(device_type=device.type, dtype=dtype):
             disc_logits = model.forward_disc(
                 input_ids=filled_ids,
                 attention_mask=batch.attention_mask,
             )
-            disc_loss: torch.Tensor = _disc_loss(disc_logits, disc_labels, batch.attention_mask)
+            disc_loss = _disc_loss(disc_logits, disc_labels, batch.attention_mask)
+            loss = gen_loss + lambda_disc * disc_loss
 
-        loss = gen_loss + lambda_disc * disc_loss
-
-        # scaler.scale() / scaler.step() are no-ops when the scaler is
-        # disabled (BF16 or FP32), so this branch handles all three dtypes.
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            optimizer.step()
+        scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
+        scaler.step(optimizer)
+        scaler.update()
         optimizer.zero_grad()
 
         progress.set_postfix(loss=f"{loss.item():.4f}")
@@ -139,7 +117,7 @@ def train_one_epoch(
 @torch.no_grad()
 def evaluate(
     tokenizer: DebertaV2Tokenizer,
-    dataloader: DataLoader,
+    dataloader: DataLoader[Any],
     model: DebertaV3GDES,
     lambda_disc: float,
     dtype: torch.dtype,
@@ -149,13 +127,12 @@ def evaluate(
     Evaluate the model on ``dataloader`` and return aggregate metrics.
 
     Args:
-        tokenizer: Used only to obtain ``mask_token_id``.
-        dataloader: Yields masked batches.
-        model: The :class:`DebertaV3GDES` instance to evaluate.
-        lambda_disc: Scaling coefficient for the discriminator loss (reported
-            in the returned metrics but not used for backprop here).
-        dtype: Autocast dtype.
-        device: Target device.
+        tokenizer:    Used only to obtain ``mask_token_id``.
+        dataloader:   Yields masked batches.
+        model:        The :class:`DebertaV3GDES` instance to evaluate.
+        lambda_disc:  Scaling coefficient for the discriminator loss.
+        dtype:        Autocast dtype.
+        device:       Target device.
 
     Returns:
         A dict with keys ``eval_loss``, ``accuracy``, and ``f1``.
@@ -171,9 +148,9 @@ def evaluate(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        with torch.autocast(device_type=device.type, dtype=dtype, enabled=dtype == torch.float16):
+        with torch.autocast(device_type=device.type, dtype=dtype):
             gen_out = model.forward_gen(**batch)
-            filled_ids = gen_out.logits.argmax(dim=-1)
+            filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)  # type: ignore[union-attr]
 
             disc_logits = model.forward_disc(
                 input_ids=filled_ids,
@@ -183,7 +160,6 @@ def evaluate(
 
         total_loss += disc_loss.item()
 
-        # Exclude padding from metrics.
         valid = batch.attention_mask.bool().view(-1)
         preds = (torch.sigmoid(disc_logits).view(-1)[valid] > 0.5).int().cpu().tolist()
         labels = disc_labels.view(-1)[valid].int().cpu().tolist()
@@ -191,7 +167,7 @@ def evaluate(
         all_preds.extend(preds)
         all_labels.extend(labels)
 
-    results = {
+    results: dict[str, Any] = {
         "eval_loss": total_loss / len(dataloader),
         "accuracy": accuracy_score(all_labels, all_preds),
         "f1": f1_score(all_labels, all_preds, zero_division=0),
