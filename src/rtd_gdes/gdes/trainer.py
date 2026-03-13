@@ -82,7 +82,9 @@ def train_one_epoch(
         scheduler:    Exponential LR scheduler stepped once per epoch.
         dtype:        ``torch.float16``, ``torch.bfloat16``, or ``torch.float32``.
         scaler:       :class:`~torch.cuda.amp.GradScaler` — enabled only for
-                      FP16, a no-op for BF16 and FP32.
+                      FP16 (5-bit exponent, prone to gradient underflow).
+                      BF16 shares FP32's 8-bit exponent range and does not
+                      require scaling. A no-op for BF16 and FP32.
         device:       Target device.
     """
     model.train()
@@ -92,7 +94,7 @@ def train_one_epoch(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        with torch.autocast(device_type=device.type, dtype=dtype):
+        with torch.amp.autocast(device_type=device.type, dtype=dtype):
             gen_out = model.forward_gen(**batch)
             gen_loss: torch.Tensor = gen_out.loss  # type: ignore[assignment]
             filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)  # type: ignore[union-attr]
@@ -148,7 +150,7 @@ def evaluate(
         batch = batch.to(device)
         disc_labels = _build_disc_labels(batch.input_ids, tokenizer.mask_token_id)
 
-        with torch.autocast(device_type=device.type, dtype=dtype):
+        with torch.amp.autocast(device_type=device.type, dtype=dtype):
             gen_out = model.forward_gen(**batch)
             filled_ids: torch.Tensor = gen_out.logits.argmax(dim=-1)  # type: ignore[union-attr]
 

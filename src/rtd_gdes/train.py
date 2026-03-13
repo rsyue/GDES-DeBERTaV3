@@ -8,6 +8,7 @@ python -m rtd_gdes.train --help
 
 import argparse
 import dataclasses
+from pathlib import Path
 
 import torch
 from torch.cuda.amp import GradScaler
@@ -35,8 +36,9 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--fp16", action="store_true", default=False, help="Enable FP16")
     p.add_argument("--bf16", action="store_true", default=False, help="Enable BF16")
     p.add_argument(
-        "-c", "--compile", action="store_true", default=False,
-        help="torch.compile with max-autotune"
+        "-o", "--output_dir", type=str, default=None,
+        help="Directory to save the model and tokenizer. "
+             "Saved under <output_dir>/<save_name>/. Defaults to ./<save_name>/."
     )
     return p.parse_args()
 
@@ -104,8 +106,9 @@ def main() -> None:
     )
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=cfg.gamma)
 
-    # Scaler is always constructed but only enabled for FP16.
-    # BF16 and FP32 pass enabled=False so scale/step/update are no-ops.
+    # BF16 has the same exponent range as FP32 (8 bits) and does not require
+    # loss scaling. FP16 has only 5 exponent bits and needs scaling to prevent
+    # small gradients from underflowing to zero.
     scaler: GradScaler = GradScaler(enabled=cfg.fp16)
 
     # ------------------------------------------------------------------ #
@@ -123,10 +126,13 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     # Save                                                                 #
     # ------------------------------------------------------------------ #
+    prefix = "."
+    if args.output_dir:
+        prefix = output_dir
     save_name = cfg.model_id.replace("-", "_").split("/")[-1] + "_gdes"
-    model.deberta.save_pretrained(save_name)
-    tokenizer.save_pretrained(save_name)
-    print(f"Model and tokenizer saved to '{save_name}/'")
+    model.deberta.save_pretrained(f"{prefix}/{save_name}")
+    tokenizer.save_pretrained(f"{prefix}/{save_name}")
+    print(f"Model and tokenizer saved to '{prefix}/{save_name}/'")
 
 
 if __name__ == "__main__":

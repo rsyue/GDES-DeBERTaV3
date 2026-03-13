@@ -18,14 +18,6 @@ git clone https://github.com/rsyue/rtd-gdes
 cd rtd-gdes
 ```
 
-We recommend using UV as your package manager. If you would like to use UV, you can speed up installs with uv pip:
-
-```bash
-uv pip install .
-```
-
-If you are using another package manager (e.g. conda or local pip), you can install via pip classic:
-
 ```bash
 pip install .
 ```
@@ -57,6 +49,7 @@ python -m rtd_gdes.train \
   --learning_rate 2e-5 \
   --weight_decay 0.01 \
   --gamma 0.9 \
+  --output_dir ./checkpoints \
   --bf16
 ```
 
@@ -74,6 +67,7 @@ python -m rtd_gdes.train \
 | `--weight_decay` | `-wd` | `float` | `0.01` | Weight decay for AdamW |
 | `--gamma` | `-g` | `float` | `0.9` | Gamma for exponential LR scheduler |
 | `--dataset` | | `str` | `imdb` | HuggingFace dataset name |
+| `--output_dir` | `-o` | `str` | `None` | Directory to save the model and tokenizer. The model is saved under `<output_dir>/<save_name>/`. Defaults to `./<save_name>/` |
 | `--fp16` | | `flag` | `False` | Enable FP16 mixed precision |
 | `--bf16` | | `flag` | `False` | Enable BF16 mixed precision |
 | `--compile` | `-c` | `flag` | `False` | Run `torch.compile` with `max-autotune` mode |
@@ -90,7 +84,7 @@ Evaluation reports discriminator loss, accuracy, and F1 score on the held-out se
 
 ### Saved Outputs
 
-After training, the model and tokenizer are saved to a directory named after the model (e.g., `deberta_v3_base_gdes/`).
+After training, the model and tokenizer are saved under `<output_dir>/<save_name>/` where `save_name` is derived from the model id (e.g. `deberta_v3_base_gdes`). If `--output_dir` is not specified, the model is saved to `./<save_name>/` in the current working directory.
 
 ## Development
 
