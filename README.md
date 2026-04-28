@@ -121,12 +121,12 @@ rtd-gdes/
 ## Roadmap
 
 - [ ] Distributed training (DDP / FSDP)
-- [ ] Publish as PyPI package
+- [x] Publish as PyPI package
 - [ ] Support additional model architectures beyond DeBERTaV3
 
 ## Citation
 
-This project is loosely based on published work done by the author in collaboration with NASA:
+This project is loosely based on published work done by the first author in collaboration with NASA:
 
 ```bibtex
 @inproceedings{yue2026deberta,
