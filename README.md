@@ -126,6 +126,16 @@ rtd-gdes/
 
 ## Citation
 
+This project is loosely based on published work done by the author in collaboration with NASA:
+
+@inproceedings{yue2026deberta,
+  title={DeBERTa-AT: A DeBERTaV3 Variant Fine-Tuned on Air Traffic Data},
+  author={Yue, Richard S and Nielsen, David L and Kalyanam, Krishna},
+  booktitle={AIAA SCITECH 2026 Forum},
+  pages={0429},
+  year={2026}
+}
+
 If you use this code, please cite the original papers:
 
 ```bibtex
