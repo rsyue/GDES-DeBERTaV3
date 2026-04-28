@@ -48,6 +48,7 @@ def get_dataloaders_and_tokenizer(
         collate_fn=collator,
         shuffle=True,
         num_workers=cfg.num_workers,
+        prefetch_factor=cfg.prefetch_factor,
         pin_memory=True,
     )
     eval_loader: DataLoader[Any] = DataLoader(
@@ -55,6 +56,7 @@ def get_dataloaders_and_tokenizer(
         batch_size=cfg.batch_size,
         collate_fn=collator,
         num_workers=cfg.num_workers,
+        prefetch_factor=cfg.prefetch_factor,
         pin_memory=True,
     )
 

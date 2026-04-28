@@ -62,6 +62,7 @@ def train_one_epoch(
     dtype: torch.dtype,
     scaler: GradScaler,
     device: torch.device,
+    max_norm: float,
 ) -> None:
     """
     Run one full pass over ``dataloader``, updating ``model`` in place.
@@ -84,6 +85,7 @@ def train_one_epoch(
                       BF16 shares FP32's 8-bit exponent range and does not
                       require scaling. A no-op for BF16 and FP32.
         device:       Target device.
+        max_norm:     Maximum norm for gradient clipping
     """
     model.train()
     progress = tqdm(dataloader, desc="train", leave=False)
@@ -106,6 +108,8 @@ def train_one_epoch(
             loss = gen_loss + lambda_disc * disc_loss
 
         scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()

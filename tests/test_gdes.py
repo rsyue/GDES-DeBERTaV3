@@ -315,6 +315,7 @@ class TestIntegration:
             dtype=torch.float32,
             scaler=GradScaler(enabled=False),
             device=torch.device("cpu"),
+            max_norm=1.0,
         )
 
     def test_evaluate_returns_expected_keys(self, model: DebertaV3GDES) -> None:

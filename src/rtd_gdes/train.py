@@ -31,6 +31,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("-g", "--gamma", type=float, help="ExponentialLR gamma")
     p.add_argument("-nw", "--num_workers", type=int, help="DataLoader worker count")
     p.add_argument("--dataset", type=str, help="HuggingFace dataset name (default: imdb)")
+    p.add_argument("-pf", "--prefetch_factor", type=int, help="Prefetch factor for dataloader")
+    p.add_argument("-mn", "--max_norm", type=float, help="Max grad norm for gradient clipping")
     p.add_argument(
         "-o",
         "--output_dir",
@@ -133,6 +135,7 @@ def main() -> None:
             dtype,
             scaler,
             device,
+            cfg.max_norm,
         )
         evaluate(tokenizer, eval_loader, model, cfg.lambda_disc, dtype, device)
         print()

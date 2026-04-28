@@ -17,6 +17,7 @@ class TrainConfig:
     dataset_split: str = "unsupervised"
     test_size: float = 0.1
     max_length: int = 512
+    prefetch_factor: int = 2
 
     # Training
     batch_size: int = 8
@@ -25,6 +26,7 @@ class TrainConfig:
     weight_decay: float = 0.01
     gamma: float = 0.9
     lambda_disc: float = 0.5
+    max_norm: float = 1.0
 
     # Precision
     fp16: bool = False
